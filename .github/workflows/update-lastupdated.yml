@@ -1,0 +1,33 @@
+name: Update lastUpdated
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+  # push:
+  #   branches:
+  #   - master
+  #   paths:
+  #   - plugins.json
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Ruby 2.6
+      uses: actions/setup-ruby@v1
+      with:
+        ruby-version: 2.6.x
+    - name: Update lastUpdated
+      run: |
+        curl -H 'Accept: application/vnd.github.v3+json' -H 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' https://api.github.com/rate_limit
+        gem install octokit
+        rake lastUpdated
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: push
+      run: |
+        git config --global user.name 'Sketch Developer'
+        git config --global user.email 'developer@sketch.com'
+        git add plugins.json
+        git commit -am 'Update lastUpdated'
+        git push

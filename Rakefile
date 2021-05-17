@@ -1,13 +1,19 @@
+#encoding: utf-8
+
 require 'json'
 require 'time'
 require "./lib/plugin-directory-utils"
 
-GITHUB_AUTH_TOKEN = `git config com.bohemiancoding.qa.token`.strip
-USERNAME = `git config github.user`.strip
+GITHUB_AUTH_TOKEN = ENV['GITHUB_TOKEN']
+
+def title_for plugin
+  title = plugin['title'] || plugin['name']
+  return titlefy(title)
+end
 
 def fix_plugin_title plugin
   if (plugin['name'] == plugin['title'] && !(IGNORE.include? plugin['title'])) || plugin['title'] == nil
-    puts "— #{plugin['name']} - #{plugin['title']}: Plugin title is wrong, fixing"
+    # puts "— #{plugin['name']} - #{plugin['title']}: Plugin title is wrong, fixing"
     plugin['title'] = titlefy(plugin['name'])
   end
 end
@@ -65,13 +71,24 @@ task :readme do
 
 A list of Sketch plugins hosted at GitHub, in alphabetical order.
 
-**Note:** if you want to add yours, just open an issue with the URL, or send a pull request.
+**Note:** if you want to add yours, just send a pull request, or use [skpm](https://skpm.io) to develop it (skpm takes care of publishing automatically). Once your plugin is added here, it will appear on [the website](https://sketchapp.com/extensions/plugins) as soon as we make a new deploy (that can take anywhere from a few minutes to a few days)
 
 EOF
 
   plugins.sort_by { |k| [ (k["title"] ? k["title"].downcase : k["name"].downcase), (k["owner"] ? k["owner"].downcase : k["author"].downcase) ] }.each do |plugin|
+
+    # puts "Processing #{plugin}"
+
+    name   = plugin['name']
+    title  = title_for plugin
+    owner  = plugin['owner']
+    author = plugin['author'] || owner
+    url    = plugin['homepage'] || "https://github.com/#{owner.downcase}/#{name.downcase}"
+    desc   = (plugin['description'] || "").strip
+
+
     if is_plugin_too_old? plugin
-      puts "#{plugin['name'] ? plugin['name'] : plugin['title']} is too old, maybe check lastUpdated?"
+      puts "#{title} is too old, lastUpdated: #{plugin['lastUpdated']}"
       next
     end
 
@@ -79,12 +96,6 @@ EOF
       next
     end
 
-    name   = plugin['name']
-    owner  = plugin['owner']
-    author = plugin['author'] || owner
-    title  = plugin['title'] || name
-    url    = plugin['homepage'] || "https://github.com/#{owner.downcase}/#{name.downcase}"
-    desc   = plugin['description'].strip
     output << "- [#{title}](#{url}), by #{author}:"
     if !desc.empty?
       output << " #{desc}"
@@ -105,11 +116,11 @@ EOF
     end
 
     name   = plugin['name']
+    title  = title_for plugin
     owner  = plugin['owner']
     author = plugin['author'] || owner
-    title  = plugin['title'] || name
     url    = plugin['homepage'] || "https://github.com/#{owner.downcase}/#{name.downcase}"
-    desc   = plugin['description'].strip
+    desc   = (plugin['description'] || "").strip
     output << "- [#{title}](#{url}), by #{author}:"
     if !desc.empty?
       output << " #{desc}"
@@ -142,21 +153,28 @@ task :lastUpdated do
   json_data.each do |plugin|
     # Only check for last push date for plugins with a repo
     if plugin['owner'] && plugin['name']
-      puts "Updating #{titlefy(plugin['name'])}"
+      # puts "Updating #{titlefy(plugin['name'])}"
       plugin_url = plugin['owner'] + "/" + plugin['name']
       begin
         repo = client.repo(plugin_url)
-        user = client.user(plugin['owner'])
-        puts "— Plugin was updated at #{repo.pushed_at}"
+        # user = client.user(plugin['owner'])
+        # puts "— Plugin was updated at #{repo.pushed_at}"
         plugin['lastUpdated'] = repo.pushed_at
       rescue Exception => e
-        puts "— Repo not available"
+        puts e
+        puts "https://github.com/#{plugin['owner']}/#{plugin['name']}"
       end
 
       # if plugin['name'] == plugin['title'] && plugin['title'] == nil
       #   puts "— Plugin title is wrong, fixing"
       #   plugin['title'] = titlefy(plugin['name'])
       # end
+    else
+      if plugin['lastUpdated'].nil?
+        puts plugin['name']
+        puts plugin['title']
+        puts "— Plugin is not on GitHub, you may want to manually add a date"
+      end
     end
     puts
   end
@@ -527,7 +545,7 @@ task :stars do
   #   f.write(JSON.pretty_generate(json_data, :indent => "  "))
   # end
 
-  
+
 end
 
 desc "Default: generate README.md from plugin"
